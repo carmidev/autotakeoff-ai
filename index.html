@@ -1,0 +1,1182 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AutoTakeoff AI - CarMiDev Engine v2.8</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              400: '#34d399',
+              500: '#10b981',
+              600: '#059669',
+              700: '#047857',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- SheetJS (Excel) -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+  
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased flex flex-col selection:bg-emerald-500 selection:text-slate-950">
+
+  <!-- TOP NAV -->
+  <header class="border-b border-slate-800 bg-slate-900/90 backdrop-blur-md sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="p-2.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-400">
+          <i data-lucide="ruler" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h1 class="text-sm font-bold text-white tracking-tight flex items-center gap-2">
+            AutoTakeoff AI <span class="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Motor Universal v2.8</span>
+          </h1>
+          <p class="text-[11px] text-slate-400">Cómputos métricos, vanos y presupuestos dinámicos para ingeniería civil</p>
+        </div>
+      </div>
+
+      <!-- Settings & API Key -->
+      <div class="flex items-center space-x-2 sm:space-x-3">
+        <!-- Model Selector -->
+        <div class="hidden sm:flex items-center bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs">
+          <i data-lucide="cpu" class="w-3.5 h-3.5 text-emerald-400 mr-1.5"></i>
+          <select id="modelSelector" class="bg-transparent text-slate-300 text-xs focus:outline-none cursor-pointer">
+            <option value="gemini-2.5-flash" selected>gemini-2.5-flash</option>
+            <option value="gemini-2.0-flash">gemini-2.0-flash (estable)</option>
+            <option value="gemini-1.5-flash">gemini-1.5-flash</option>
+          </select>
+        </div>
+
+        <!-- API Key Input -->
+        <div class="relative flex items-center">
+          <input
+            type="password"
+            id="apiKeyInput"
+            placeholder="Gemini API Key..."
+            class="bg-slate-950 border border-slate-700 text-xs text-slate-200 rounded-lg pl-7 pr-3 py-1.5 focus:outline-none focus:border-emerald-500 w-44 sm:w-60 transition-all placeholder:text-slate-600"
+          />
+          <i data-lucide="key" class="w-3 h-3 text-slate-500 absolute left-2.5"></i>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN WORKSPACE -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+    <!-- CONTROLS & DROPZONE -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+      <!-- PARÁMETROS DE OBRA -->
+      <div class="lg:col-span-4 bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between shadow-xl">
+        <div class="space-y-4">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+              <i data-lucide="sliders" class="w-4 h-4 text-emerald-400"></i>
+              Criterios de Cómputo
+            </h2>
+            <span class="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded font-mono">Dinámico</span>
+          </div>
+
+          <!-- Porcentaje Desperdicio -->
+          <div>
+            <div class="flex justify-between items-center mb-1">
+              <label class="text-xs font-medium text-slate-300">Factor Desperdicio Piso</label>
+              <span id="wasteValLabel" class="text-xs font-mono font-bold text-emerald-400">10%</span>
+            </div>
+            <input
+              type="range"
+              id="wasteSlider"
+              min="0"
+              max="25"
+              step="1"
+              value="10"
+              class="w-full accent-emerald-500 cursor-pointer bg-slate-800 rounded-lg h-2"
+            />
+          </div>
+
+          <!-- Método de Desperdicio -->
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">Cálculo de Merma</label>
+            <select id="wasteMethodSelect" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-emerald-500">
+              <option value="direct">Directo: Área × (1 + %)</option>
+              <option value="yield">Rendimiento: Área ÷ (1 - %)</option>
+            </select>
+          </div>
+
+          <!-- Altura Libre -->
+          <div>
+            <div class="flex justify-between items-center mb-1">
+              <label class="text-xs font-medium text-slate-300">Altura Libre Entrepiso (h)</label>
+              <span id="heightValLabel" class="text-xs font-mono font-bold text-cyan-400">2.60 m</span>
+            </div>
+            <input
+              type="range"
+              id="heightSlider"
+              min="2.00"
+              max="4.00"
+              step="0.05"
+              value="2.60"
+              class="w-full accent-cyan-500 cursor-pointer bg-slate-800 rounded-lg h-2"
+            />
+          </div>
+
+          <!-- Deducción de Vanos -->
+          <div class="p-3 bg-slate-950/60 rounded-xl border border-slate-800 text-[11px] space-y-1">
+            <div class="flex items-center justify-between text-slate-300 font-medium">
+              <span class="flex items-center gap-1.5">
+                <i data-lucide="door-closed" class="w-3.5 h-3.5 text-emerald-400"></i> Deducción de Vanos:
+              </span>
+              <span class="text-emerald-400 font-mono">Activo</span>
+            </div>
+            <p class="text-[10px] text-slate-500">
+              Resta el área de puertas identificadas (P 0.86×2.10m base) del cómputo de paredes y rodapiés.
+            </p>
+          </div>
+        </div>
+
+        <div class="mt-4 pt-3 border-t border-slate-800/80 text-[11px] text-slate-400 flex items-center justify-between">
+          <span>Tabulador de Precios:</span>
+          <span class="text-emerald-400 font-mono font-bold">USD Activo</span>
+        </div>
+      </div>
+
+      <!-- DROPZONE -->
+      <div class="lg:col-span-8 bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between shadow-xl">
+        <div>
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+              <i data-lucide="file-up" class="w-4 h-4 text-emerald-400"></i>
+              Carga de Plano Arquitectónico (PDF o Imagen)
+            </h2>
+            <span id="statusTag" class="text-[11px] bg-slate-800 text-slate-400 px-2.5 py-0.5 rounded-full border border-slate-700">Esperando archivo</span>
+          </div>
+
+          <div
+            id="dropzone"
+            class="border-2 border-dashed border-slate-700 hover:border-emerald-500/80 rounded-xl p-6 text-center cursor-pointer transition-all bg-slate-950/40 hover:bg-slate-950/80 flex flex-col items-center justify-center min-h-[140px]"
+          >
+            <input type="file" id="fileInput" accept="application/pdf,image/png,image/jpeg,image/webp" class="hidden" />
+            <div id="dropzoneEmpty" class="flex flex-col items-center space-y-1.5">
+              <div class="p-2.5 bg-slate-800/70 rounded-full text-slate-400">
+                <i data-lucide="upload" class="w-5 h-5 text-emerald-400"></i>
+              </div>
+              <p class="text-xs font-medium text-slate-200">
+                Arrastra cualquier plano (PDF o Imagen) aquí o <span class="text-emerald-400 underline">haz clic</span>
+              </p>
+              <p class="text-[11px] text-slate-500">Admite planos de casas, apartamentos, plantas completas y cajetines de obra</p>
+            </div>
+
+            <div id="dropzoneFilled" class="hidden flex-col items-center space-y-1">
+              <i data-lucide="file-check-2" class="w-8 h-8 text-emerald-400"></i>
+              <p id="fileNameDisplay" class="text-xs font-bold text-white"></p>
+              <p id="fileSizeDisplay" class="text-[10px] text-slate-400 font-mono"></p>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-4 flex flex-wrap items-center justify-end gap-2">
+          <button
+            id="btnProcess"
+            class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold text-xs rounded-xl transition shadow-lg shadow-emerald-950/50 flex items-center space-x-2"
+          >
+            <i data-lucide="calculator" class="w-4 h-4"></i>
+            <span>Procesar Cómputos con IA</span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- SPINNER -->
+    <div id="loadingOverlay" class="hidden bg-slate-900 border border-slate-800 rounded-2xl p-10 text-center shadow-2xl">
+      <div class="inline-flex p-3 bg-emerald-500/10 text-emerald-400 rounded-full mb-3 animate-spin">
+        <i data-lucide="loader-2" class="w-8 h-8"></i>
+      </div>
+      <h3 id="loadingTitle" class="text-sm font-bold text-white">Extrayendo información arquitectónica y metrajes...</h3>
+      <p id="loadingSubtitle" class="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+        Rastreando recintos, cotas, vanos de puertas (P 0.86×2.10m), áreas cerradas en cajetín y aplicando tabulador de partidas.
+      </p>
+    </div>
+
+    <!-- ERROR NOTIFICATION -->
+    <div id="errorAlert" class="hidden p-4 bg-red-950/60 border border-red-800 rounded-xl text-red-200 text-xs flex items-center justify-between">
+      <div class="flex items-center space-x-2">
+        <i data-lucide="alert-triangle" class="w-4 h-4 text-red-400 shrink-0"></i>
+        <span id="errorMessage">Error</span>
+      </div>
+      <button onclick="document.getElementById('errorAlert').classList.add('hidden')" class="text-red-400 hover:text-red-200 text-xs font-semibold">Cerrar</button>
+    </div>
+
+    <!-- DASHBOARD RESULTS -->
+    <div id="resultsView" class="hidden space-y-6">
+
+      <!-- PROJECT HEADER & EXPORT -->
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-slate-900 border border-slate-800 p-5 rounded-2xl">
+        <div>
+          <span class="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">Proyecto Computado</span>
+          <h2 id="projectTitle" class="text-xl font-black text-white">Proyecto Analizado</h2>
+          <p id="projectSubinfo" class="text-xs text-slate-400 mt-0.5">Resumen dinámico generado a partir del plano</p>
+        </div>
+        <div class="flex items-center space-x-2">
+          <button
+            id="btnExportExcel"
+            class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold text-xs rounded-xl flex items-center space-x-2 transition shadow"
+          >
+            <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
+            <span>Exportar Presupuesto (.xlsx)</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- KPI METRIC CARDS -->
+      <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        <!-- KPI 1 -->
+        <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+          <div class="text-slate-400 text-[11px] font-medium flex items-center justify-between">
+            <span>Piso Neto Total</span>
+            <i data-lucide="layers" class="w-3.5 h-3.5 text-slate-500"></i>
+          </div>
+          <div id="kpiNetFloor" class="text-xl sm:text-2xl font-black text-white mt-1 font-mono">0.00 m²</div>
+          <div class="text-[10px] text-slate-500 mt-0.5">Área útil de recintos</div>
+        </div>
+
+        <!-- KPI 2 -->
+        <div class="bg-slate-900 border border-emerald-500/30 p-4 rounded-xl bg-emerald-950/10">
+          <div class="text-emerald-400 text-[11px] font-medium flex items-center justify-between">
+            <span>Piso Total + Merma</span>
+            <i data-lucide="layout-grid" class="w-3.5 h-3.5 text-emerald-400"></i>
+          </div>
+          <div id="kpiWasteFloor" class="text-xl sm:text-2xl font-black text-emerald-400 mt-1 font-mono">0.00 m²</div>
+          <div id="kpiWasteSubtitle" class="text-[10px] text-emerald-400/70 mt-0.5">+10% pedido a proveedor</div>
+        </div>
+
+        <!-- KPI 3 -->
+        <div class="bg-slate-900 border border-cyan-500/30 p-4 rounded-xl bg-cyan-950/10">
+          <div class="text-cyan-400 text-[11px] font-medium flex items-center justify-between">
+            <span>Paredes Húmedas</span>
+            <i data-lucide="box" class="w-3.5 h-3.5 text-cyan-400"></i>
+          </div>
+          <div id="kpiWetWalls" class="text-xl sm:text-2xl font-black text-cyan-400 mt-1 font-mono">0.00 m²</div>
+          <div class="text-[10px] text-cyan-400/70 mt-0.5">Baños y lavanderías netos</div>
+        </div>
+
+        <!-- KPI 4 -->
+        <div class="bg-slate-900 border border-amber-500/30 p-4 rounded-xl bg-amber-950/10">
+          <div class="text-amber-400 text-[11px] font-medium flex items-center justify-between">
+            <span>Rodapié Áreas Secas</span>
+            <i data-lucide="minimize-2" class="w-3.5 h-3.5 text-amber-400"></i>
+          </div>
+          <div id="kpiBaseboard" class="text-xl sm:text-2xl font-black text-amber-400 mt-1 font-mono">0.00 ML</div>
+          <div class="text-[10px] text-amber-400/70 mt-0.5">Perímetro sin vanos</div>
+        </div>
+
+        <!-- KPI 5: TOTAL PRESUPUESTO USD -->
+        <div class="col-span-2 lg:col-span-1 bg-slate-900 border border-emerald-500/50 p-4 rounded-xl bg-gradient-to-br from-emerald-950/30 to-slate-900">
+          <div class="text-emerald-300 text-[11px] font-bold flex items-center justify-between">
+            <span>Total Estimado</span>
+            <i data-lucide="badge-dollar-sign" class="w-4 h-4 text-emerald-400"></i>
+          </div>
+          <div id="kpiTotalCost" class="text-xl sm:text-2xl font-black text-emerald-400 mt-1 font-mono">$0.00</div>
+          <div id="kpiUnitCost" class="text-[10px] text-emerald-300/80 mt-0.5 font-mono">$0.00 / m² útil</div>
+        </div>
+      </div>
+
+      <!-- TABS -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+        <div class="border-b border-slate-800 p-3 flex flex-wrap justify-between items-center bg-slate-950/40 gap-3">
+          <div class="flex flex-wrap gap-2">
+            <button id="tabBudgetBtn" class="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 transition">
+              📋 Resumen Presupuestario de Obra
+            </button>
+            <button id="tabRoomsBtn" class="px-3.5 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 transition">
+              📐 Desglose por Recinto & Vanos
+            </button>
+            <button id="tabPricesBtn" class="px-3.5 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 transition">
+              🏷️ Tabulador de Precios (USD)
+            </button>
+            <button id="tabSqlBtn" class="px-3.5 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 transition">
+              🗄️ Esquema Supabase
+            </button>
+          </div>
+          <span id="tabInfoTag" class="text-[11px] text-slate-400 font-mono">Presupuesto consolidado en USD</span>
+        </div>
+
+        <!-- VISTA 1: RESUMEN PRESUPUESTARIO DINÁMICO CON PRECIOS USD -->
+        <div id="viewBudget" class="overflow-x-auto p-4">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr class="bg-slate-950 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800 text-[10px]">
+                <th class="py-2.5 px-3">Código</th>
+                <th class="py-2.5 px-3">Descripción de Partida Sugerida</th>
+                <th class="py-2.5 px-3 text-center">Unidad</th>
+                <th class="py-2.5 px-3 text-right text-slate-300">Cantidad Cómputo</th>
+                <th class="py-2.5 px-3 text-right text-emerald-400">P.U. ($ USD)</th>
+                <th class="py-2.5 px-3 text-right text-emerald-400 font-bold">Total ($ USD)</th>
+                <th class="py-2.5 px-3 text-slate-400">Criterio / Detalle de Cómputo</th>
+              </tr>
+            </thead>
+            <tbody id="budgetRows" class="divide-y divide-slate-800/60 font-mono text-slate-200 text-[11px]">
+              <!-- Inyectado dinámicamente -->
+            </tbody>
+            <tfoot class="border-t-2 border-emerald-500/40 bg-slate-950 font-mono font-bold text-xs">
+              <tr>
+                <td colspan="5" class="py-3 px-3 text-right uppercase text-slate-300 font-sans">Total Presupuesto Estimado (USD):</td>
+                <td id="budgetFootTotal" class="py-3 px-3 text-right text-emerald-400 text-sm">$0.00</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <!-- VISTA 2: DESGLOSE POR RECINTO & VANOS -->
+        <div id="viewRooms" class="hidden overflow-x-auto p-4">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr class="bg-slate-950 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800 text-[10px]">
+                <th class="py-2.5 px-3">Ambiente</th>
+                <th class="py-2.5 px-3">Tipo</th>
+                <th class="py-2.5 px-3 text-right">L x A (m)</th>
+                <th class="py-2.5 px-3 text-right">Área Neta (m²)</th>
+                <th class="py-2.5 px-3 text-right text-emerald-400">Piso + Merma</th>
+                <th class="py-2.5 px-3 text-right text-slate-400">Vanos Puertas</th>
+                <th class="py-2.5 px-3 text-right text-cyan-400">Pared Neta (m²)</th>
+                <th class="py-2.5 px-3 text-right text-amber-400">Rodapié (ML)</th>
+              </tr>
+            </thead>
+            <tbody id="takeoffRows" class="divide-y divide-slate-800/60 font-mono text-slate-200 text-[11px]">
+              <!-- Inyectado dinámicamente -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- VISTA 3: TABULADOR DE PARTIDAS (CONFIGURADOR DE PRECIOS USD) -->
+        <div id="viewPrices" class="hidden p-5 space-y-4">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+            <div>
+              <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                <i data-lucide="tags" class="w-4 h-4 text-emerald-400"></i>
+                Tabulador de Precios Unitarios en USD
+              </h3>
+              <p class="text-xs text-slate-400">Edita los costos unitarios y factores para recalcular todo el presupuesto automáticamente.</p>
+            </div>
+            <button id="btnResetPrices" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg transition">
+              Restablecer Precios
+            </button>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="priceCardsContainer">
+            <!-- Inyectado dinámicamente -->
+          </div>
+        </div>
+
+        <!-- VISTA 4: ESQUEMA SUPABASE SQL -->
+        <div id="viewSql" class="hidden p-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <h3 class="text-sm font-bold text-white flex items-center gap-2">
+              <i data-lucide="database" class="w-4 h-4 text-emerald-400"></i>
+              Migración SQL Supabase (Tablas `proyectos`, `ambientes`, `tabulador_partidas` con RLS)
+            </h3>
+            <button id="btnCopySql" class="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold text-xs rounded-lg transition flex items-center gap-1.5">
+              <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+              <span id="copySqlText">Copiar SQL</span>
+            </button>
+          </div>
+          <pre class="bg-slate-950 p-4 rounded-xl border border-slate-800 text-[11px] font-mono text-emerald-300 overflow-x-auto max-h-96"><code>-- TABLAS: proyectos, ambientes, tabulador_partidas
+CREATE TABLE IF NOT EXISTS public.proyectos (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    nombre TEXT NOT NULL,
+    area_documento_m2 NUMERIC(10, 2),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.ambientes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    proyecto_id UUID NOT NULL REFERENCES public.proyectos(id) ON DELETE CASCADE,
+    nivel TEXT NOT NULL,
+    nombre TEXT NOT NULL,
+    area_neta_m2 NUMERIC(10, 2) NOT NULL,
+    largo_m NUMERIC(10, 2),
+    ancho_m NUMERIC(10, 2),
+    tipo TEXT NOT NULL CHECK (tipo IN ('social', 'bed', 'humedo', 'service', 'exterior')),
+    vanos_area_m2 NUMERIC(10, 2) DEFAULT 0,
+    ancho_puertas_m NUMERIC(10, 2) DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS public.tabulador_partidas (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    codigo TEXT NOT NULL,
+    descripcion TEXT NOT NULL,
+    unidad TEXT NOT NULL CHECK (unidad IN ('M2', 'ML', 'SG', 'UND')),
+    precio_unitario_usd NUMERIC(12, 2) NOT NULL,
+    factor_desperdicio NUMERIC(5, 2) DEFAULT 0.10
+);
+
+ALTER TABLE public.proyectos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ambientes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.tabulador_partidas ENABLE ROW LEVEL SECURITY;</code></pre>
+        </div>
+
+      </div>
+
+    </div>
+
+  </main>
+
+  <script>
+    lucide.createIcons();
+
+    const DEFAULT_API_KEY = "";
+
+    // Tabulador de partidas por defecto con precios USD
+    const DEFAULT_PRICES = {
+      'REV-01': { code: 'REV-01', name: 'Sobrepiso de nivelación y adecuación', unit: 'M2', price: 9.50, waste: 0.05 },
+      'REV-02': { code: 'REV-02', name: 'Porcelanato en áreas principales / secas', unit: 'M2', price: 32.00, waste: 0.10 },
+      'REV-03': { code: 'REV-03', name: 'Porcelanato antideslizante en baños y servicios', unit: 'M2', price: 36.50, waste: 0.12 },
+      'PARE-01': { code: 'PARE-01', name: 'Revestimiento cerámico en paredes húmedas', unit: 'M2', price: 28.00, waste: 0.10 },
+      'ROD-01': { code: 'ROD-01', name: 'Rodapié porcelánico en áreas secas', unit: 'ML', price: 7.20, waste: 0.08 },
+      'PINT-01': { code: 'PINT-01', name: 'Encamisado y pintura de caucho en paredes secas', unit: 'M2', price: 6.80, waste: 0.05 }
+    };
+
+    const savedPrices = localStorage.getItem('takeoff_prices');
+    const tabuladorPrices = savedPrices ? JSON.parse(savedPrices) : JSON.parse(JSON.stringify(DEFAULT_PRICES));
+
+    const state = {
+      project: null,
+      file: null,
+      fileBase64: null,
+      fileMime: null,
+      apiKey: localStorage.getItem('gemini_api_key') || DEFAULT_API_KEY,
+      selectedModel: localStorage.getItem('gemini_model') || 'gemini-2.5-flash',
+      budgetConsolidated: [],
+      flatTableRows: [],
+      prices: tabuladorPrices
+    };
+
+    // DOM Elements
+    const apiKeyInput = document.getElementById('apiKeyInput');
+    const modelSelector = document.getElementById('modelSelector');
+    const wasteSlider = document.getElementById('wasteSlider');
+    const wasteValLabel = document.getElementById('wasteValLabel');
+    const wasteMethodSelect = document.getElementById('wasteMethodSelect');
+    const heightSlider = document.getElementById('heightSlider');
+    const heightValLabel = document.getElementById('heightValLabel');
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('fileInput');
+    const dropzoneEmpty = document.getElementById('dropzoneEmpty');
+    const dropzoneFilled = document.getElementById('dropzoneFilled');
+    const fileNameDisplay = document.getElementById('fileNameDisplay');
+    const fileSizeDisplay = document.getElementById('fileSizeDisplay');
+    const btnProcess = document.getElementById('btnProcess');
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    const loadingTitle = document.getElementById('loadingTitle');
+    const loadingSubtitle = document.getElementById('loadingSubtitle');
+    const errorAlert = document.getElementById('errorAlert');
+    const errorMessage = document.getElementById('errorMessage');
+    const takeoffRows = document.getElementById('takeoffRows');
+    const budgetRows = document.getElementById('budgetRows');
+    const budgetFootTotal = document.getElementById('budgetFootTotal');
+    const btnExportExcel = document.getElementById('btnExportExcel');
+    const statusTag = document.getElementById('statusTag');
+    const priceCardsContainer = document.getElementById('priceCardsContainer');
+    const btnResetPrices = document.getElementById('btnResetPrices');
+    const btnCopySql = document.getElementById('btnCopySql');
+    const copySqlText = document.getElementById('copySqlText');
+
+    // Tabs
+    const tabBudgetBtn = document.getElementById('tabBudgetBtn');
+    const tabRoomsBtn = document.getElementById('tabRoomsBtn');
+    const tabPricesBtn = document.getElementById('tabPricesBtn');
+    const tabSqlBtn = document.getElementById('tabSqlBtn');
+    const viewBudget = document.getElementById('viewBudget');
+    const viewRooms = document.getElementById('viewRooms');
+    const viewPrices = document.getElementById('viewPrices');
+    const viewSql = document.getElementById('viewSql');
+    const resultsView = document.getElementById('resultsView');
+
+    // Init inputs
+    if (state.apiKey) apiKeyInput.value = state.apiKey;
+    apiKeyInput.addEventListener('input', (e) => {
+      state.apiKey = e.target.value.trim();
+      localStorage.setItem('gemini_api_key', state.apiKey);
+    });
+
+    if (modelSelector) {
+      modelSelector.value = state.selectedModel;
+      modelSelector.addEventListener('change', (e) => {
+        state.selectedModel = e.target.value;
+        localStorage.setItem('gemini_model', state.selectedModel);
+      });
+    }
+
+    // Tab Navigation
+    function activateTab(activeBtn, activeView) {
+      [tabBudgetBtn, tabRoomsBtn, tabPricesBtn, tabSqlBtn].forEach(b => {
+        b.className = "px-3.5 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 transition";
+      });
+      [viewBudget, viewRooms, viewPrices, viewSql].forEach(v => v.classList.add('hidden'));
+
+      activeBtn.className = "px-3.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 transition";
+      activeView.classList.remove('hidden');
+    }
+
+    tabBudgetBtn.addEventListener('click', () => activateTab(tabBudgetBtn, viewBudget));
+    tabRoomsBtn.addEventListener('click', () => activateTab(tabRoomsBtn, viewRooms));
+    tabPricesBtn.addEventListener('click', () => activateTab(tabPricesBtn, viewPrices));
+    tabSqlBtn.addEventListener('click', () => activateTab(tabSqlBtn, viewSql));
+
+    // Sliders
+    wasteSlider.addEventListener('input', (e) => {
+      wasteValLabel.textContent = `${e.target.value}%`;
+      document.getElementById('kpiWasteSubtitle').textContent = `+${e.target.value}% pedido a proveedor`;
+      renderDynamicComputations();
+    });
+
+    wasteMethodSelect.addEventListener('change', () => {
+      renderDynamicComputations();
+    });
+
+    heightSlider.addEventListener('input', (e) => {
+      heightValLabel.textContent = `${parseFloat(e.target.value).toFixed(2)} m`;
+      renderDynamicComputations();
+    });
+
+    // Render Price Editor
+    function renderPriceCards() {
+      priceCardsContainer.innerHTML = '';
+      Object.keys(state.prices).forEach(key => {
+        const item = state.prices[key];
+        const card = document.createElement('div');
+        card.className = "bg-slate-950 p-4 rounded-xl border border-slate-800 flex flex-col justify-between";
+        card.innerHTML = `
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-emerald-400 font-bold">${item.code}</span>
+              <span class="text-[10px] text-slate-500 font-mono">${item.unit}</span>
+            </div>
+            <h4 class="text-xs font-medium text-slate-200 mb-2">${item.name}</h4>
+          </div>
+          <div class="flex items-center justify-between pt-2 border-t border-slate-800/80">
+            <label class="text-[11px] text-slate-400">Precio Unitario ($):</label>
+            <div class="flex items-center gap-1">
+              <span class="text-xs text-emerald-400 font-bold">$</span>
+              <input
+                type="number"
+                step="0.1"
+                min="0"
+                value="${item.price}"
+                data-code="${item.code}"
+                class="price-input w-20 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-right font-mono text-emerald-400 font-bold focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+          </div>
+        `;
+        priceCardsContainer.appendChild(card);
+      });
+
+      // Add listeners to price inputs
+      document.querySelectorAll('.price-input').forEach(input => {
+        input.addEventListener('change', (e) => {
+          const code = e.target.getAttribute('data-code');
+          const newVal = parseFloat(e.target.value) || 0;
+          if (state.prices[code]) {
+            state.prices[code].price = newVal;
+            localStorage.setItem('takeoff_prices', JSON.stringify(state.prices));
+            renderDynamicComputations();
+          }
+        });
+      });
+    }
+
+    btnResetPrices.addEventListener('click', () => {
+      state.prices = JSON.parse(JSON.stringify(DEFAULT_PRICES));
+      localStorage.setItem('takeoff_prices', JSON.stringify(state.prices));
+      renderPriceCards();
+      renderDynamicComputations();
+    });
+
+    renderPriceCards();
+
+    // Copy SQL Button
+    btnCopySql.addEventListener('click', () => {
+      const sqlCode = `-- ESQUEMA COMPLETO SUPABASE
+CREATE TABLE IF NOT EXISTS public.proyectos (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    nombre TEXT NOT NULL,
+    area_documento_m2 NUMERIC(10, 2),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.ambientes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    proyecto_id UUID NOT NULL REFERENCES public.proyectos(id) ON DELETE CASCADE,
+    nivel TEXT NOT NULL,
+    nombre TEXT NOT NULL,
+    area_neta_m2 NUMERIC(10, 2) NOT NULL,
+    largo_m NUMERIC(10, 2),
+    ancho_m NUMERIC(10, 2),
+    tipo TEXT NOT NULL CHECK (tipo IN ('social', 'bed', 'humedo', 'service', 'exterior')),
+    vanos_area_m2 NUMERIC(10, 2) DEFAULT 0,
+    ancho_puertas_m NUMERIC(10, 2) DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS public.tabulador_partidas (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    codigo TEXT NOT NULL,
+    descripcion TEXT NOT NULL,
+    unidad TEXT NOT NULL CHECK (unidad IN ('M2', 'ML', 'SG', 'UND')),
+    precio_unitario_usd NUMERIC(12, 2) NOT NULL,
+    factor_desperdicio NUMERIC(5, 2) DEFAULT 0.10
+);`;
+      navigator.clipboard.writeText(sqlCode).then(() => {
+        copySqlText.textContent = "¡Copiado!";
+        setTimeout(() => copySqlText.textContent = "Copiar SQL", 2000);
+      });
+    });
+
+    // File Upload
+    dropzone.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files.length) handleFileSelect(e.target.files[0]);
+    });
+
+    ['dragover', 'dragenter'].forEach(evt => {
+      dropzone.addEventListener(evt, (e) => {
+        e.preventDefault();
+        dropzone.classList.add('border-emerald-500', 'bg-slate-900');
+      });
+    });
+
+    ['dragleave', 'drop'].forEach(evt => {
+      dropzone.addEventListener(evt, (e) => {
+        e.preventDefault();
+        dropzone.classList.remove('border-emerald-500', 'bg-slate-900');
+      });
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+      if (e.dataTransfer.files.length) handleFileSelect(e.dataTransfer.files[0]);
+    });
+
+    function handleFileSelect(file) {
+      state.file = file;
+      state.fileMime = file.type;
+      fileNameDisplay.textContent = file.name;
+      fileSizeDisplay.textContent = `${(file.size / (1024 * 1024)).toFixed(2)} MB`;
+      dropzoneEmpty.classList.add('hidden');
+      dropzoneFilled.classList.remove('hidden');
+      dropzoneFilled.classList.add('flex');
+      statusTag.textContent = "Plano cargado listo para procesar";
+      statusTag.className = "text-[11px] bg-emerald-500/20 text-emerald-300 px-2.5 py-0.5 rounded-full border border-emerald-500/30";
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        state.fileBase64 = reader.result.split(',')[1];
+      };
+      reader.readAsDataURL(file);
+    }
+
+    btnProcess.addEventListener('click', async () => {
+      errorAlert.classList.add('hidden');
+
+      if (!state.fileBase64) {
+        showError("Por favor selecciona un archivo PDF o Imagen de plano primero.");
+        return;
+      }
+
+      loadingOverlay.classList.remove('hidden');
+      resultsView.classList.add('hidden');
+
+      try {
+        const extractedData = await callGeminiAPIWithFallback(state.fileBase64, state.fileMime, state.apiKey);
+        state.project = extractedData;
+        renderDynamicComputations();
+        resultsView.classList.remove('hidden');
+        statusTag.textContent = "Cómputos Finalizados";
+        statusTag.className = "text-[11px] bg-emerald-500/20 text-emerald-300 px-2.5 py-0.5 rounded-full border border-emerald-500/30";
+      } catch (err) {
+        console.error(err);
+        showError(err.message || "Error procesando el plano con la IA.");
+      } finally {
+        loadingOverlay.classList.add('hidden');
+      }
+    });
+
+    // LLAMADA A GEMINI CON FALLBACK AUTOMÁTICO DE MODELO
+    async function callGeminiAPIWithFallback(base64, mimeType, apiKey) {
+      let modelsToTry = [state.selectedModel];
+      if (!modelsToTry.includes('gemini-2.0-flash')) modelsToTry.push('gemini-2.0-flash');
+      if (!modelsToTry.includes('gemini-1.5-flash')) modelsToTry.push('gemini-1.5-flash');
+
+      let lastError = null;
+      for (const model of modelsToTry) {
+        try {
+          loadingTitle.textContent = `Procesando plano con ${model}...`;
+          return await executeGeminiRequest(model, base64, mimeType, apiKey);
+        } catch (err) {
+          console.warn(`Fallo con modelo ${model}:`, err.message);
+          lastError = err;
+          // Si es 404 de modelo no encontrado, probamos con el siguiente
+          if (err.message.includes('404') || err.message.includes('not found') || err.message.includes('Model')) {
+            continue;
+          } else {
+            throw err;
+          }
+        }
+      }
+      throw lastError || new Error("No se pudo conectar con los modelos de Gemini disponibles.");
+    }
+
+    async function executeGeminiRequest(modelName, base64, mimeType, apiKey) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`;
+
+      const systemPrompt = `You are an expert Architectural Takeoff Engineer and Civil Estimator.
+Analyze the architectural floor plan drawing with extreme precision across ALL pages/levels (e.g. Planta Baja, Nivel 1, Planta Alta, Azotea):
+1. Extract the project name or apartment identifier/location.
+2. For each level:
+   - levelName: name of the level/floor.
+   - declaredClosedArea: total closed area declared in cajetín/rótulo or title block (e.g. "Área: 86.31 m2"). If none, omit or null.
+   - declaredTotalArea: total area including balconies/terraces if declared.
+   - rooms: list of EVERY individual closed space/room:
+     * name: original Spanish name (e.g. "Sala", "Comedor", "Dormitorio Principal", "Baño 1", "Cocina", "Lavandero", "Balcón").
+     * area: net floor area in square meters (m2).
+     * length & width: dimensions in meters from dimension lines if visible.
+     * type: MUST be strictly one of:
+         - "social": living room, dining room, hallways, vestibule, study.
+         - "bed": bedrooms, closets, dressing rooms.
+         - "humedo": bathrooms, toilets, showers.
+         - "service": kitchen, laundry room, pantry.
+         - "exterior": balcony, terrace, porch, patio.
+     * doors: list of doors into this room with width and height in meters (e.g. 0.86 and 2.10). If visible on drawing, extract exact dimensions; if standard door shown, set width: 0.86, height: 2.10.
+
+Return ONLY structured JSON conforming strictly to the requested schema.`;
+
+      const responseSchema = {
+        type: "OBJECT",
+        properties: {
+          projectName: { type: "STRING" },
+          levels: {
+            type: "ARRAY",
+            items: {
+              type: "OBJECT",
+              properties: {
+                levelName: { type: "STRING" },
+                declaredClosedArea: { type: "NUMBER" },
+                declaredTotalArea: { type: "NUMBER" },
+                rooms: {
+                  type: "ARRAY",
+                  items: {
+                    type: "OBJECT",
+                    properties: {
+                      name: { type: "STRING" },
+                      area: { type: "NUMBER" },
+                      length: { type: "NUMBER" },
+                      width: { type: "NUMBER" },
+                      type: { type: "STRING", enum: ["social", "bed", "humedo", "service", "exterior"] },
+                      doors: {
+                        type: "ARRAY",
+                        items: {
+                          type: "OBJECT",
+                          properties: {
+                            width: { type: "NUMBER" },
+                            height: { type: "NUMBER" }
+                          },
+                          required: ["width", "height"]
+                        }
+                      }
+                    },
+                    required: ["name", "area", "type"]
+                  }
+                }
+              },
+              required: ["levelName", "rooms"]
+            }
+          }
+        },
+        required: ["projectName", "levels"]
+      };
+
+      const payload = {
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { text: systemPrompt + " Extrae exhaustivamente todos los ambientes, cotas, áreas y vanos de este plano arquitectónico." },
+              { inline_data: { mime_type: mimeType, data: base64 } }
+            ]
+          }
+        ],
+        generationConfig: {
+          response_mime_type: "application/json",
+          response_schema: responseSchema,
+          temperature: 0.1
+        }
+      };
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": apiKey
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        const errorJson = await res.json().catch(() => ({}));
+        throw new Error(errorJson.error?.message || `HTTP ${res.status}: ${res.statusText}`);
+      }
+
+      const resData = await res.json();
+      const rawText = resData.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!rawText) throw new Error("La IA no devolvió contenido.");
+      return JSON.parse(rawText);
+    }
+
+    function showError(msg) {
+      errorMessage.textContent = msg;
+      errorAlert.classList.remove('hidden');
+    }
+
+    // MOTOR DINÁMICO DE CÓMPUTO Y PRESUPUESTO
+    function renderDynamicComputations() {
+      if (!state.project || !state.project.levels) return;
+
+      const wastePct = parseFloat(wasteSlider.value) || 10;
+      const wasteMethod = wasteMethodSelect.value;
+      const h = parseFloat(heightSlider.value) || 2.60;
+
+      // Función de merma
+      const applyWaste = (area) => {
+        if (wasteMethod === 'yield' && wastePct < 100) {
+          return area / (1 - (wastePct / 100));
+        }
+        return area * (1 + (wastePct / 100));
+      };
+
+      document.getElementById('projectTitle').textContent = state.project.projectName || "Proyecto Arquitectónico";
+      
+      takeoffRows.innerHTML = '';
+      budgetRows.innerHTML = '';
+      state.flatTableRows = [];
+      state.budgetConsolidated = [];
+
+      let totalGlobalNetFloor = 0;
+      let totalGlobalWasteFloor = 0;
+      let totalGlobalWetWalls = 0;
+      let totalGlobalBaseboard = 0;
+      let totalGlobalBudgetUSD = 0;
+
+      state.project.levels.forEach((lvl, lvlIdx) => {
+        let lvlNetFloor = 0;
+        let lvlDryFloor = 0;
+        let lvlWetFloor = 0;
+        let lvlExtFloor = 0;
+        let lvlWetWalls = 0;
+        let lvlDryWalls = 0;
+        let lvlBaseboard = 0;
+
+        lvl.rooms.forEach((room) => {
+          const area = Number(room.area) || 0;
+          let length = Number(room.length) || 0;
+          let width = Number(room.width) || 0;
+
+          if ((length <= 0 || width <= 0) && area > 0) {
+            width = Math.sqrt(area / 1.3);
+            length = width * 1.3;
+          }
+
+          const perimeter = 2 * (length + width);
+          const floorWithWaste = applyWaste(area);
+          const grossWall = perimeter * h;
+
+          let doorAreaSum = 0;
+          let doorWidthSum = 0;
+
+          if (room.doors && room.doors.length > 0) {
+            room.doors.forEach(d => {
+              const dw = Number(d.width) || 0.86;
+              const dh = Number(d.height) || 2.10;
+              doorAreaSum += (dw * dh);
+              doorWidthSum += dw;
+            });
+          } else {
+            // Deducción estándar de 1 puerta (0.86x2.10m)
+            doorAreaSum = 0.86 * 2.10;
+            doorWidthSum = 0.86;
+          }
+
+          const netWall = Math.max(0, grossWall - doorAreaSum);
+          
+          // Clasificación de uso según esquema
+          const isHumedo = room.type === 'humedo' || /baño|bano|bath|toilet|lavandero|laundry/i.test(room.name);
+          const isExterior = room.type === 'exterior' || /terraza|balcon|balcón|porche|patio/i.test(room.name);
+          const isDry = !isHumedo && !isExterior;
+
+          const netBaseboard = isDry ? Math.max(0, perimeter - doorWidthSum) : 0;
+
+          if (isHumedo) {
+            lvlWetFloor += area;
+            lvlWetWalls += netWall;
+          } else if (isExterior) {
+            lvlExtFloor += area;
+          } else {
+            lvlDryFloor += area;
+            lvlDryWalls += netWall;
+          }
+
+          lvlNetFloor += area;
+          lvlBaseboard += netBaseboard;
+
+          const rowData = {
+            item: state.flatTableRows.length + 1,
+            level: lvl.levelName,
+            room: room.name,
+            type: isHumedo ? 'Humedo' : (isExterior ? 'Exterior' : 'Social/Seco'),
+            dims: `${length.toFixed(2)} x ${width.toFixed(2)}`,
+            netFloor: area,
+            wasteFloor: floorWithWaste,
+            vanosArea: doorAreaSum,
+            netWall: netWall,
+            baseboard: netBaseboard
+          };
+          state.flatTableRows.push(rowData);
+
+          const tr = document.createElement('tr');
+          tr.className = "hover:bg-slate-800/40 transition-colors";
+          tr.innerHTML = `
+            <td class="py-2.5 px-3 font-sans font-medium text-white">${room.name} <span class="text-[9px] text-slate-500">(${lvl.levelName})</span></td>
+            <td class="py-2.5 px-3 text-[10px] text-slate-400">${rowData.type}</td>
+            <td class="py-2.5 px-3 text-right text-slate-400 font-mono">${length.toFixed(2)}x${width.toFixed(2)}</td>
+            <td class="py-2.5 px-3 text-right text-slate-200 font-mono font-bold">${area.toFixed(2)}</td>
+            <td class="py-2.5 px-3 text-right text-emerald-400 font-mono font-bold">${floorWithWaste.toFixed(2)}</td>
+            <td class="py-2.5 px-3 text-right text-slate-500 font-mono">-${doorAreaSum.toFixed(2)} m²</td>
+            <td class="py-2.5 px-3 text-right text-cyan-400 font-mono">${netWall.toFixed(2)}</td>
+            <td class="py-2.5 px-3 text-right text-amber-400 font-mono">${netBaseboard > 0 ? netBaseboard.toFixed(2) : '-'}</td>
+          `;
+          takeoffRows.appendChild(tr);
+        });
+
+        // Verificación de Macro-Área de Nivel vs Suma de Recintos
+        const declaredArea = Number(lvl.declaredClosedArea) || 0;
+        const baseLevelFloor = Math.max(lvlNetFloor, declaredArea);
+
+        totalGlobalNetFloor += baseLevelFloor;
+        totalGlobalWasteFloor += applyWaste(baseLevelFloor);
+        totalGlobalWetWalls += lvlWetWalls;
+        totalGlobalBaseboard += lvlBaseboard;
+
+        // CONSTRUCCIÓN DINÁMICA DEL PRESUPUESTO VALORIZADO EN USD
+        let itemCounter = 1;
+
+        // 1. Sobrepiso / nivelación
+        const pOver = state.prices['REV-01'];
+        const qOver = baseLevelFloor;
+        const subOver = qOver * pOver.price;
+        state.budgetConsolidated.push({
+          code: pOver.code,
+          item: `${lvlIdx + 1}.${itemCounter++}`,
+          desc: `${pOver.name.toUpperCase()} EN ${lvl.levelName.toUpperCase()}`,
+          unit: pOver.unit,
+          qty: qOver,
+          pu: pOver.price,
+          total: subOver,
+          notes: `Área base cerrada (${baseLevelFloor.toFixed(2)} m²) para base y nivelación.`
+        });
+        totalGlobalBudgetUSD += subOver;
+
+        // 2. Piso en Áreas Secas
+        const pSeco = state.prices['REV-02'];
+        const pisoSecoNivel = (declaredArea > 0 && lvlWetFloor > 0) ? (declaredArea - lvlWetFloor) : (lvlDryFloor + lvlExtFloor);
+        const qSeco = applyWaste(pisoSecoNivel);
+        const subSeco = qSeco * pSeco.price;
+        state.budgetConsolidated.push({
+          code: pSeco.code,
+          item: `${lvlIdx + 1}.${itemCounter++}`,
+          desc: `${pSeco.name.toUpperCase()} (${lvl.levelName.toUpperCase()})`,
+          unit: pSeco.unit,
+          qty: qSeco,
+          pu: pSeco.price,
+          total: subSeco,
+          notes: `Área neta ${pisoSecoNivel.toFixed(2)} m² con ${wastePct}% de merma incluida.`
+        });
+        totalGlobalBudgetUSD += subSeco;
+
+        // 3. Piso Baños/Húmedo si existe
+        if (lvlWetFloor > 0) {
+          const pWet = state.prices['REV-03'];
+          const qWet = applyWaste(lvlWetFloor);
+          const subWet = qWet * pWet.price;
+          state.budgetConsolidated.push({
+            code: pWet.code,
+            item: `${lvlIdx + 1}.${itemCounter++}`,
+            desc: `${pWet.name.toUpperCase()} (${lvl.levelName.toUpperCase()})`,
+            unit: pWet.unit,
+            qty: qWet,
+            pu: pWet.price,
+            total: subWet,
+            notes: `Área neta ${lvlWetFloor.toFixed(2)} m² con ${wastePct}% de merma.`
+          });
+          totalGlobalBudgetUSD += subWet;
+        }
+
+        // 4. Paredes Baños/Húmedo si existe
+        if (lvlWetWalls > 0) {
+          const pWallWet = state.prices['PARE-01'];
+          const qWallWet = lvlWetWalls;
+          const subWallWet = qWallWet * pWallWet.price;
+          state.budgetConsolidated.push({
+            code: pWallWet.code,
+            item: `${lvlIdx + 1}.${itemCounter++}`,
+            desc: `${pWallWet.name.toUpperCase()} (${lvl.levelName.toUpperCase()})`,
+            unit: pWallWet.unit,
+            qty: qWallWet,
+            pu: pWallWet.price,
+            total: subWallWet,
+            notes: `Superficie vertical neta (h=${h}m), vanos de puertas descontados.`
+          });
+          totalGlobalBudgetUSD += subWallWet;
+        }
+
+        // 5. Rodapiés de áreas secas
+        if (lvlBaseboard > 0) {
+          const pRod = state.prices['ROD-01'];
+          const qRod = lvlBaseboard;
+          const subRod = qRod * pRod.price;
+          state.budgetConsolidated.push({
+            code: pRod.code,
+            item: `${lvlIdx + 1}.${itemCounter++}`,
+            desc: `${pRod.name.toUpperCase()} (${lvl.levelName.toUpperCase()})`,
+            unit: pRod.unit,
+            qty: qRod,
+            pu: pRod.price,
+            total: subRod,
+            notes: `Perímetro útil sin vanos (excluye zonas húmedas y exteriores).`
+          });
+          totalGlobalBudgetUSD += subRod;
+        }
+
+        // 6. Pintura / Encamisado paredes secas
+        if (lvlDryWalls > 0) {
+          const pPint = state.prices['PINT-01'];
+          const qPint = lvlDryWalls;
+          const subPint = qPint * pPint.price;
+          state.budgetConsolidated.push({
+            code: pPint.code,
+            item: `${lvlIdx + 1}.${itemCounter++}`,
+            desc: `${pPint.name.toUpperCase()} (${lvl.levelName.toUpperCase()})`,
+            unit: pPint.unit,
+            qty: qPint,
+            pu: pPint.price,
+            total: subPint,
+            notes: `Paredes de áreas sociales y habitaciones descontando vanos.`
+          });
+          totalGlobalBudgetUSD += subPint;
+        }
+      });
+
+      // Renderizar Sábana Presupuestaria Dinámica
+      state.budgetConsolidated.forEach(p => {
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-slate-800/40 transition-colors";
+        tr.innerHTML = `
+          <td class="py-3 px-3 font-mono text-[10px] text-emerald-400 font-bold">${p.code}</td>
+          <td class="py-3 px-3 font-sans font-medium text-slate-200">
+            <span class="text-slate-500 font-mono text-[10px] mr-1.5">${p.item}</span>
+            ${p.desc}
+          </td>
+          <td class="py-3 px-3 text-center font-mono text-slate-400">${p.unit}</td>
+          <td class="py-3 px-3 text-right font-mono text-slate-300 font-bold">${p.qty.toFixed(2)}</td>
+          <td class="py-3 px-3 text-right font-mono text-emerald-400">$${p.pu.toFixed(2)}</td>
+          <td class="py-3 px-3 text-right font-mono font-black text-emerald-400 text-sm">$${p.total.toFixed(2)}</td>
+          <td class="py-3 px-3 font-sans text-slate-500 text-[10px]">${p.notes}</td>
+        `;
+        budgetRows.appendChild(tr);
+      });
+
+      // Actualizar KPIs superiores y Footers
+      document.getElementById('kpiNetFloor').textContent = `${totalGlobalNetFloor.toFixed(2)} m²`;
+      document.getElementById('kpiWasteFloor').textContent = `${totalGlobalWasteFloor.toFixed(2)} m²`;
+      document.getElementById('kpiWetWalls').textContent = `${totalGlobalWetWalls.toFixed(2)} m²`;
+      document.getElementById('kpiBaseboard').textContent = `${totalGlobalBaseboard.toFixed(2)} ML`;
+      document.getElementById('kpiTotalCost').textContent = `$${totalGlobalBudgetUSD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      
+      const unitCostM2 = totalGlobalNetFloor > 0 ? (totalGlobalBudgetUSD / totalGlobalNetFloor) : 0;
+      document.getElementById('kpiUnitCost').textContent = `$${unitCostM2.toFixed(2)} / m² útil`;
+      budgetFootTotal.textContent = `$${totalGlobalBudgetUSD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+      document.getElementById('projectSubinfo').textContent = `${state.project.levels.length} Nivel(es) | ${state.flatTableRows.length} Recintos Computados`;
+    }
+
+    // EXPORTACIÓN A EXCEL (.XLSX) MULTI-HOJA CON SHEETJS
+    btnExportExcel.addEventListener('click', () => {
+      if (!state.budgetConsolidated.length) return;
+
+      // Hoja 1: Resumen de Partidas y Costos
+      const budgetSheetData = state.budgetConsolidated.map(b => ({
+        "Código": b.code,
+        "Item": b.item,
+        "Descripción de Partida": b.desc,
+        "Unidad": b.unit,
+        "Cantidad Cómputo": Number(b.qty.toFixed(2)),
+        "P.U. ($ USD)": Number(b.pu.toFixed(2)),
+        "Total ($ USD)": Number(b.total.toFixed(2)),
+        "Criterio de Cálculo": b.notes
+      }));
+      const wsBudget = XLSX.utils.json_to_sheet(budgetSheetData);
+      wsBudget['!cols'] = [{ wch: 10 }, { wch: 8 }, { wch: 60 }, { wch: 10 }, { wch: 18 }, { wch: 14 }, { wch: 16 }, { wch: 45 }];
+
+      // Hoja 2: Desglose Detallado por Recinto y Vanos
+      const roomsSheetData = state.flatTableRows.map(r => ({
+        "Item": r.item,
+        "Nivel": r.level,
+        "Ambiente": r.room,
+        "Tipo": r.type,
+        "Dimensiones (m)": r.dims,
+        "Área Piso Neta (m²)": Number(r.netFloor.toFixed(2)),
+        "Piso c/ Merma (m²)": Number(r.wasteFloor.toFixed(2)),
+        "Vanos Puertas (m²)": Number(r.vanosArea.toFixed(2)),
+        "Pared Neta (m²)": Number(r.netWall.toFixed(2)),
+        "Rodapié (ML)": Number(r.baseboard.toFixed(2))
+      }));
+      const wsRooms = XLSX.utils.json_to_sheet(roomsSheetData);
+      wsRooms['!cols'] = [{ wch: 6 }, { wch: 15 }, { wch: 25 }, { wch: 15 }, { wch: 18 }, { wch: 20 }, { wch: 20 }, { wch: 18 }, { wch: 20 }, { wch: 16 }];
+
+      // Hoja 3: Tabulador Base Utilizado
+      const tabuladorData = Object.values(state.prices).map(p => ({
+        "Código": p.code,
+        "Descripción": p.name,
+        "Unidad": p.unit,
+        "Precio Unitario ($ USD)": p.price,
+        "Factor Desperdicio": p.waste
+      }));
+      const wsTabulador = XLSX.utils.json_to_sheet(tabuladorData);
+      wsTabulador['!cols'] = [{ wch: 12 }, { wch: 50 }, { wch: 10 }, { wch: 22 }, { wch: 18 }];
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, wsBudget, "1. Presupuesto Valorado");
+      XLSX.utils.book_append_sheet(wb, wsRooms, "2. Desglose Recintos y Vanos");
+      XLSX.utils.book_append_sheet(wb, wsTabulador, "3. Tabulador Base");
+      
+      const cleanName = (state.project.projectName || 'Obra').replace(/[^a-zA-Z0-9]/g, '_');
+      XLSX.writeFile(wb, `Presupuesto_Takeoff_${cleanName}.xlsx`);
+    });
+  </script>
+</body>
+</html>
