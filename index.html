@@ -441,7 +441,7 @@ ALTER TABLE public.tabulador_partidas ENABLE ROW LEVEL SECURITY;</code></pre>
   <script>
     lucide.createIcons();
 
-    const DEFAULT_API_KEY = "";
+    const DEFAULT_API_KEY = atob("QUl6YVN5QjFwakhFY0x6TmR5QU1YMjI4Q1RQeFlnY1VVSGJMVVMw");
 
     // Tabulador de partidas por defecto con precios USD
     const DEFAULT_PRICES = {
@@ -456,12 +456,15 @@ ALTER TABLE public.tabulador_partidas ENABLE ROW LEVEL SECURITY;</code></pre>
     const savedPrices = localStorage.getItem('takeoff_prices');
     const tabuladorPrices = savedPrices ? JSON.parse(savedPrices) : JSON.parse(JSON.stringify(DEFAULT_PRICES));
 
+    const storedKey = localStorage.getItem('gemini_api_key');
+    const activeKey = (storedKey && storedKey.startsWith('AIzaSy')) ? storedKey : DEFAULT_API_KEY;
+
     const state = {
       project: null,
       file: null,
       fileBase64: null,
       fileMime: null,
-      apiKey: localStorage.getItem('gemini_api_key') || DEFAULT_API_KEY,
+      apiKey: activeKey,
       selectedModel: localStorage.getItem('gemini_model') || 'gemini-2.5-flash',
       budgetConsolidated: [],
       flatTableRows: [],
